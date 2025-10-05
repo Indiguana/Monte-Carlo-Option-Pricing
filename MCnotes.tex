@@ -1,0 +1,220 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath, amssymb, amsthm, graphicx, hyperref, geometry}
+\geometry{margin=1in}
+\setlength{\parskip}{0.75em}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+\begin{center}
+    {\LARGE \textbf{Monte Carlo Option Pricing – Notes}} \\
+    \vspace{0.5em}
+    {\large by Indi}
+\end{center}
+
+\section{Overview}
+Monte Carlo simulation is a method that uses random sampling to estimate numerical results for things that are hard to predict.
+In quantitative finance, it is commonly used to simulate the future evolution of stock prices and to estimate the fair value of financial derivatives such as \textbf{options}. An option is a financial contract that allows the user to buy the right (not obligation) to buy the stock at a future price. 
+
+\subsection*{Goal}
+Estimate the price of a European call option(type of option where the user has the right to buy asset on the expiration day) using:
+\begin{enumerate}
+    \item Historical stock data (e.g., Apple, ticker AAPL)
+    \item A stochastic model of price movements (Geometric Brownian Motion). Stochastic means it models a system that varies over time.
+    \item A large number of simulated price paths
+    \item Discounting the expected payoff back to the present
+\end{enumerate}
+
+
+
+\section{1. Theoretical Background}
+
+
+\subsection{1.1 Stock Price Dynamics}
+We model stock prices using a \textbf{Geometric Brownian Motion (GBM)}:
+\[
+dS_t = \mu S_t dt + \sigma S_t dW_t
+\]
+where:
+\begin{itemize}
+    \item $S_t$ = stock price at time $t$
+    \item $\mu$ = drift (expected return)
+    \item $\sigma$ = volatility (standard deviation of returns)
+    \item $dW_t$ = random shock (Brownian motion term)
+    \item $T$ = Time 
+\end{itemize}
+
+\subsection{1.0 Brownian Motion}
+Brownian Motion represents random movement, kind of like how a pollen grain wiggles in water.  
+In finance, it’s used to represent the unpredictable fluctuations of asset prices.
+\subsubsection*{Mathematical Notation}
+In differential form, we write:
+\[
+    dW_t \sim \mathcal{N}(0, dt)
+\]
+This means that over a very small time step $dt$, the change $dW_t$ follows a normal distribution with mean $0$ and variance $dt$.
+\subsubsection*{Definition}
+A \textbf{standard Brownian Motion} $W_t$ is a continuous-time stochastic process that satisfies:
+\begin{enumerate}
+    \item $W_0 = 0$ almost surely.
+    \item It has \textbf{independent increments}: for any $0 \leq s < t$, the increment $W_t - W_s$ is independent of all previous values $\{W_u : u \leq s\}$.
+    \item The increments are \textbf{normally distributed}:
+    \[
+        W_t - W_s \sim \mathcal{N}(0, t-s)
+    \]
+    meaning the mean of the increment is $0$, and the variance grows linearly with time.
+    \item The paths of $W_t$ are continuous but almost surely nowhere differentiable.
+\end{enumerate}
+
+
+\subsection{1.1 Stock Price Dynamics}
+We model stock prices using a \textbf{Geometric Brownian Motion (GBM)}:
+\[
+dS_t = \mu S_t dt + \sigma S_t dW_t
+\]
+where:
+\begin{itemize}
+    \item $S_t$ = stock price at time $t$
+    \item $\mu$ = drift (expected return)
+    \item $\sigma$ = volatility (standard deviation of returns)
+    \item $dW_t$ = random shock (Brownian motion term)
+    \item $T$ = Time 
+\end{itemize}
+
+In discrete form (for simulation):
+\[
+S_T = S_0 \exp \left( (\mu - \frac{1}{2}\sigma^2)T + \sigma \sqrt{T} Z \right)
+\]
+where $Z \sim N(0,1)$ is a standard normal random variable.
+
+
+
+\subsection{1.2 Option Payoff}
+For a \textbf{European call option}:
+\[
+\text{Payoff} = \max(S_T - K, 0)
+\]
+where $K$ is the strike price and $S_T$ is the simulated price at expiration.
+
+
+
+\subsection{1.3 Risk-Neutral Valuation}
+In practice, we use the \textbf{risk-neutral drift} $r$ instead of $\mu$.  
+This assumes investors act without  to risk, and the expected return equals the risk-free rate.
+
+Hence, the simulated process becomes:
+\[
+S_T = S_0 \exp \left( (r - \frac{1}{2}\sigma^2)T + \sigma \sqrt{T} Z \right)
+\]
+
+The option price is then the discounted expected payoff:
+\[
+C = e^{-rT} \, \mathbb{E}[\max(S_T - K, 0)]
+\]
+
+
+
+\section{2. Black--Scholes Formula}
+Black and Scholes (1973) derived a closed-form formula for European options:
+\[
+C = S_0 N(d_1) - K e^{-rT} N(d_2)
+\]
+with:
+\[
+d_1 = \frac{\ln(S_0 / K) + (r + \frac{1}{2}\sigma^2)T}{\sigma \sqrt{T}}, \qquad
+d_2 = d_1 - \sigma \sqrt{T}
+\]
+and $N(x)$ is the cumulative distribution function of the standard normal distribution.
+
+This gives a fast, analytical benchmark to compare against Monte Carlo results.
+
+
+
+\section{3. Implementation Steps in Python}
+
+\subsection{3.1 Fetch Data}
+Use \texttt{yfinance} to retrieve historical prices:
+\begin{verbatim}
+import yfinance as yf
+data = yf.download("AAPL", start="2020-01-01", end="2023-01-01")["Close"]
+\end{verbatim}
+
+\subsection{3.2 Estimate Drift and Volatility}
+Compute daily log returns:
+\[
+r_t = \ln \frac{S_t}{S_{t-1}}
+\]
+and estimate:
+\[
+\mu = \text{mean}(r_t) \times 252, \quad
+\sigma = \text{std}(r_t) \times \sqrt{252}
+\]
+
+---
+
+\subsection{3.3 Monte Carlo Simulation}
+\begin{verbatim}
+import numpy as np
+
+S0 = data[-1]
+K = 150
+T = 1
+r = 0.05
+simulations = 100000
+
+Z = np.random.normal(0, 1, simulations)
+ST = S0 * np.exp((r - 0.5*sigma**2)*T + sigma*np.sqrt(T)*Z)
+
+payoffs = np.maximum(ST - K, 0)
+option_price = np.exp(-r*T) * np.mean(payoffs)
+\end{verbatim}
+
+---
+
+\subsection{3.4 Visualization}
+\begin{verbatim}
+import matplotlib.pyplot as plt
+
+plt.hist(ST, bins=50, alpha=0.7)
+plt.axvline(K, color='red', linestyle='--', label='Strike Price')
+plt.title('Simulated Stock Prices at Expiration')
+plt.xlabel('Price')
+plt.ylabel('Frequency')
+plt.legend()
+plt.show()
+\end{verbatim}
+
+---
+
+\section{4. Comparison with Black--Scholes}
+\begin{verbatim}
+from scipy.stats import norm
+
+def black_scholes_call(S, K, T, r, sigma):
+    d1 = (np.log(S/K) + (r + 0.5*sigma**2)*T) / (sigma*np.sqrt(T))
+    d2 = d1 - sigma*np.sqrt(T)
+    return S*norm.cdf(d1) - K*np.exp(-r*T)*norm.cdf(d2)
+
+bs_price = black_scholes_call(S0, K, T, r, sigma)
+
+print("Monte Carlo:", option_price)
+print("Black-Scholes:", bs_price)
+\end{verbatim}
+
+
+
+\section{5. Key Insights}
+
+\begin{itemize}
+    \item \textbf{Monte Carlo intuition:} Simulate many random futures, take their average.
+    \item \textbf{Law of Large Numbers:} As simulations increase, estimates converge, as the standard deviation decreases
+    \item \textbf{Randomness:} Each $Z$ represents a random market movement.
+    \item \textbf{Discounting:} Future payoffs must be brought back to today's value using $e^{-rT}$.
+    \item \textbf{Validation:} Always compare your simulated result to the Black--Scholes value, as it's predicted vs calculated
+    \item \textbf{Scalability:} Monte Carlo handles complex payoffs where B--S fails, because it acconuts for random, numerous price points over time.
+\end{itemize}
+
+
+
+
+\end{document}
