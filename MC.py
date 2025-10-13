@@ -59,3 +59,22 @@ def estimate_annual_mu_sigma(prices, trading_days):
     mu = logrets.mean() * trading_days #Gets the annual log returns
     sigma = logrets.std(ddof=1) * math.sqrt(trading_days)
     return float(mu), float(sigma)
+
+
+#This function is calculates the monte carlo approximation by just averaging the expected price of random events. Outputs a tuple of (est_price, avg_error)
+def mc_call_price_gbm(S0, K, r, sigma, T, N= 100_000, seed = None):
+    #Here, n represents the number of monte carlo simulations, which defaults to 100k if no input is provided
+    # Additionally, seed is an optional RNG
+    rng = np.random.default_rng(seed)
+    Z = rng.standard_normal(N)#These will be used to estimate the S_T = Stock price at the specified time
+    drift = (r - 0.5 * sigma * sigma) * T #expect average rate of change of stock
+    diffusion = sigma * math.sqrt(T) * Z #how much stock price will change (volatility)
+    ST = S0 * np.exp(drift + diffusion)
+    payoffs = np.maximum(ST - K, 0.0) #Ammount the option holder will get if they use the option on expiration date
+    discounted = np.exp(-r * T) * payoffs#Adjusts payoffs to get their value today (adjusted by the interest rate)
+    price = float(discounted.mean())
+    se = float(discounted.std(ddof=1) / math.sqrt(N)) #formula to calculate standard error
+    return price, se
+
+
+
